@@ -1,0 +1,476 @@
+================================================================================
+SEVERITY MODEL - DOCUMENTACION TECNICA COMPLETA
+================================================================================
+
+Este documento explica en detalle el modelo de calculo de umbrales.
+Para instrucciones de uso, ver README.md en la raiz del proyecto.
+
+================================================================================
+INDICE
+================================================================================
+1.  Objetivo del modelo
+2.  Los 5 stages operacionales
+3.  Metricas utilizadas (PYFR, SA)
+4.  Stress score: formula y pesos
+5.  Pipeline completo del modelo
+6.  Calculo del baseline ponderado
+7.  Normalizacion del stress por zona
+8.  Suavizado Savitzky-Golay
+9.  Truncado en el pico de stress
+10. Metodo de buckets con percentiles equidistantes
+11. Calculo de umbrales por bucket
+12. Filtro anti-outliers (MIN_ORDERS_PER_POINT)
+13. Zonas problematicas y diagnostico
+14. Validacion con sesiones reales
+15. Estructura de archivos del proyecto
+16. Configuracion completa
+17. Tablas de BigQuery
+18. Columnas del DataFrame de stress
+
+
+================================================================================
+1. OBJETIVO
+================================================================================
+Calcular para CADA ZONA los umbrales de mean_delay que definen cuando activar
+cada stage operacional. El output es una tabla:
+
+| zone_id | zone_name | low_delay | preventive | cont_I | cont_II | inoperable |
+|---------|-----------|-----------|------------|--------|---------|------------|
+| 123     | Belgrano  | 5         | 9          | 13     | 16      | 20         |
+
+Interpretacion: Zona "Belgrano" entra en "Preventive" cuando mean_delay >= 9 min.
+
+
+================================================================================
+2. LOS 5 STAGES OPERACIONALES
+================================================================================
+   Stage           | Descripcion
+   ----------------|------------------------------------------------------------
+   Low Delay       | Leve congestion, monitoreo activo
+   Preventive      | Se activan medidas preventivas
+   Containment I   | Primera fase de contencion
+   Containment II  | Contencion agresiva (acciones logisticas empiezan aca)
+   Inoperable      | Zona critica, maximas restricciones
+
+
+================================================================================
+3. METRICAS UTILIZADAS
+================================================================================
+PYFR (PedidosYa Fail Rate):
+   - Definicion: Ordenes REJECTED donde fail_rate_owner IN ('PedidosYa', 'Rider')
+   - Dividido por: Total de ordenes
+   - Interpretacion: Mide fallas atribuibles a la operacion, no al comercio
+   - Comportamiento: Aumenta con el delay (mas tiempo = mas cancelaciones)
+
+SA (Staffing Affection):
+   - Definicion: Ordenes donde staffing_over_10 > 0
+   - Dividido por: Total de ordenes
+   - Interpretacion: Indica falta de repartidores en la zona
+   - Comportamiento: Aumenta mucho con delay alto (congestion)
+
+
+================================================================================
+4. STRESS SCORE: FORMULA Y PESOS
+================================================================================
+El stress score mide cuanto se desvian PYFR y SA de su baseline normal.
+
+Formula:
+   stress_score = 0.40 * z_score(PYFR) + 0.60 * z_score(SA)
+
+Donde:
+   z_score(metrica) = (valor_actual - baseline) / std_baseline
+
+Pesos actuales (config/settings.py):
+   - fail_rate: 40%
+   - staffing_affection: 60%
+
+Justificacion de pesos:
+   - SA tiene mas peso porque es mas sensible a la congestion
+   - PYFR tiene mas ruido y depende de factores externos
+
+Los z-scores se clipean a [-5, 10] para evitar valores extremos.
+
+
+================================================================================
+5. PIPELINE COMPLETO DEL MODELO
+================================================================================
+El modelo sigue estos pasos en orden:
+
+PASO 1: EXTRACCION DE DATOS (data_extraction.py)
+   - Extrae datos de BigQuery de los ultimos 90 dias
+   - Join de mean_delay_report con fact_orders por MINUTO
+   - Calcula PYFR y SA por (zona, delay_minute)
+   - Excluye fechas atipicas (Navidad, Año Nuevo)
+   - Output: DataFrame con ~2,800 registros (zona, delay, metricas)
+
+PASO 2: CALCULO DE BASELINES (feature_engineering.py)
+   - Para cada zona, define baseline = comportamiento cuando delay <= P25
+   - Calcula promedio PONDERADO POR ORDENES de PYFR y SA
+   - Solo usa puntos con >= 30 ordenes
+   - Output: baseline_fail_rate, baseline_staffing, std por zona
+
+PASO 3: CALCULO DE STRESS SCORES (feature_engineering.py)
+   - Calcula z-scores de PYFR y SA usando baselines
+   - Combina en stress_score con pesos 40/60
+   - Normaliza a 0-100 POR ZONA (usando P99 ponderado como max)
+   - Output: stress_score_normalized por cada (zona, delay)
+
+PASO 4: SUAVIZADO SAVITZKY-GOLAY (feature_engineering.py)
+   - Aplica filtro Savitzky-Golay (window=11, polyorder=3)
+   - Calcula minimo y maximo de la curva suavizada
+   - Guarda delay_at_min, delay_at_max para cada zona
+   - Output: stress_smoothed, delay_at_min, delay_at_max
+
+PASO 5: CALCULO DE UMBRALES (stage_calculator.py)
+   - Trunca curva en delay_at_max (pico de stress)
+   - Divide en 5 buckets por percentiles equidistantes del stress suavizado
+   - Calcula delay promedio ponderado de cada bucket
+   - Output: umbrales low_delay, preventive, cont_I, cont_II, inoperable
+
+PASO 6: EXPORTACION
+   - Fuerza monotonia creciente (low_delay < preventive < ...)
+   - Redondea a enteros
+   - Exporta a CSV y genera PDF de diagnostico
+
+
+================================================================================
+6. CALCULO DEL BASELINE (PONDERADO POR ORDENES)
+================================================================================
+Para cada zona, el baseline representa el comportamiento "normal".
+
+Algoritmo:
+1. Filtrar puntos con >= MIN_ORDERS_PER_POINT (30) ordenes
+2. Calcular P25 del delay para esa zona
+3. Filtrar registros donde mean_delay <= P25 (condiciones normales)
+4. Calcular promedio PONDERADO POR ORDENES:
+
+   baseline_fail_rate = sum(fail_rate * ordenes) / sum(ordenes)
+   baseline_staffing = sum(staffing * ordenes) / sum(ordenes)
+
+5. Calcular std (minimo 0.1 para evitar division por cero)
+
+Por que ponderado por ordenes?
+   - Puntos con mas ordenes son mas representativos
+   - Evita que outliers con pocas ordenes distorsionen el baseline
+
+
+================================================================================
+7. NORMALIZACION DEL STRESS POR ZONA
+================================================================================
+El stress se normaliza a 0-100 PARA CADA ZONA individualmente.
+
+Algoritmo:
+1. Usar solo puntos con >= MIN_ORDERS_PER_POINT ordenes
+2. Calcular stress_baseline = promedio ponderado cuando delay <= P25
+3. Calcular stress_max = P99 PONDERADO por ordenes
+4. Normalizar:
+
+   stress_normalized = (stress - stress_baseline) / (stress_max - stress_baseline) * 100
+
+Por que por zona y no global?
+   - Cada zona tiene su propia dinamica
+   - Evita que zonas "tranquilas" tengan rangos comprimidos
+   - Garantiza que los percentiles funcionen (P20 ~ 20, P40 ~ 40, etc.)
+
+Trade-off: No se puede comparar stress entre zonas (100 en zona A != 100 en zona B)
+
+
+================================================================================
+8. SUAVIZADO SAVITZKY-GOLAY
+================================================================================
+Savitzky-Golay es un filtro que suaviza datos preservando caracteristicas importantes.
+
+Parametros (config/settings.py):
+   SAVGOL_WINDOW = 11      # Puntos vecinos a considerar (debe ser impar)
+   SAVGOL_POLYORDER = 3    # Grado del polinomio local
+
+Como funciona:
+1. Para cada punto, ajusta un polinomio a los puntos vecinos
+2. Usa el valor del polinomio en ese punto como valor suavizado
+3. Preserva picos y valles mejor que media movil simple
+
+Implementacion (feature_engineering.py - apply_savgol_smoothing):
+1. Para cada zona, ordena datos por delay
+2. Filtra puntos con >= 30 ordenes
+3. Aplica savgol_filter de scipy
+4. Si hay muy pocos puntos, ajusta window automaticamente
+5. Calcula y guarda min/max de la curva suavizada
+
+Output adicional:
+   - stress_smoothed: valor suavizado del stress
+   - delay_at_min: delay donde el stress suavizado es minimo
+   - delay_at_max: delay donde el stress suavizado es maximo
+   - stress_smooth_min: valor del stress en el minimo
+   - stress_smooth_max: valor del stress en el maximo
+
+
+================================================================================
+9. TRUNCADO EN EL PICO DE STRESS
+================================================================================
+La curva de stress se TRUNCA en el punto donde alcanza su maximo.
+
+Justificacion:
+   - Queremos actuar ANTES de que el stress llegue al maximo
+   - Los datos post-pico son menos relevantes (el daño ya esta hecho)
+   - Evita umbrales artificialmente altos por datos ruidosos despues del pico
+
+Implementacion:
+1. Encontrar delay_at_max (del suavizado)
+2. Filtrar: solo usar datos donde mean_delay <= delay_at_max
+3. Los puntos despues del pico se ignoran para el calculo de umbrales
+
+Ejemplo:
+   Si el stress maximo ocurre en delay=20 min, solo usamos datos de 0-20 min
+   para calcular los umbrales. Datos de delay=25, 30, etc. se ignoran.
+
+
+================================================================================
+10. METODO DE BUCKETS CON PERCENTILES EQUIDISTANTES
+================================================================================
+Despues del truncado, dividimos los datos en 5 buckets segun el stress suavizado.
+
+Buckets (percentiles equidistantes):
+   - Bucket 1 (P0-P20):   stress bajo      -> umbral low_delay
+   - Bucket 2 (P20-P40):  stress moderado  -> umbral preventive
+   - Bucket 3 (P40-P60):  stress elevado   -> umbral containment_I
+   - Bucket 4 (P60-P80):  stress alto      -> umbral containment_II
+   - Bucket 5 (P80-P100): stress critico   -> umbral inoperable
+
+Algoritmo:
+1. Calcular percentiles del stress_smoothed: P0, P20, P40, P60, P80, P100
+2. Asignar cada registro al bucket correspondiente segun su stress
+3. Para cada bucket, calcular el delay promedio ponderado
+
+Ventajas:
+   - Garantiza distribucion uniforme de registros por bucket
+   - Usa la curva suavizada (sin ruido)
+   - Percentiles equidistantes = umbrales naturalmente ascendentes
+
+
+================================================================================
+11. CALCULO DE UMBRALES POR BUCKET
+================================================================================
+Para cada bucket, el umbral es el DELAY PROMEDIO PONDERADO POR ORDENES.
+
+Formula:
+   umbral = sum(mean_delay * total_orders) / sum(total_orders)
+
+Por que ponderado por ordenes?
+   - Delays con mas ordenes son mas representativos de la operacion real
+   - Evita que delays con pocas ordenes tengan peso desproporcionado
+
+Ejemplo para zona Belgrano:
+   Bucket P20-P40 (preventive):
+   - delay=7 con 500 ordenes
+   - delay=8 con 300 ordenes
+   - delay=9 con 200 ordenes
+
+   umbral_preventive = (7*500 + 8*300 + 9*200) / (500+300+200) = 7.7 -> 8
+
+
+================================================================================
+12. FILTRO ANTI-OUTLIERS (MIN_ORDERS_PER_POINT)
+================================================================================
+Se filtran puntos con pocas ordenes para evitar outliers.
+
+Configuracion: MIN_ORDERS_PER_POINT = 30
+
+Problema que resuelve:
+   Si hay un punto con delay=50 y solo 5 ordenes que le fue bien (bajo FR),
+   ese punto distorsiona la curva de stress. No es representativo.
+
+Donde se aplica:
+   - Calculo de baselines (feature_engineering.py)
+   - Suavizado Savitzky-Golay (feature_engineering.py)
+   - Calculo de umbrales (stage_calculator.py)
+   - Visualizaciones (visualization.py)
+
+Fallback:
+   Si una zona tiene menos de 5 puntos con >= 30 ordenes,
+   se usan todos los puntos disponibles (con warning en logs).
+
+
+================================================================================
+13. ZONAS PROBLEMATICAS Y DIAGNOSTICO
+================================================================================
+Algunas zonas pueden tener problemas en los umbrales:
+
+PROBLEMA 1: Umbrales todos iguales (ej: 60, 60, 60, 60, 60)
+   Causa: stress_max <= stress_baseline (sin variacion de stress)
+   Solucion: El modelo marca stress_normalized = 0 para toda la zona
+
+PROBLEMA 2: Umbrales no ascendentes (ej: 5, 7, 9, 19, 19)
+   Causa: Percentiles de stress muy cercanos o buckets vacios
+   Solucion: export_thresholds_for_config() fuerza monotonia
+
+PROBLEMA 3: Pocos puntos validos
+   Causa: La zona tiene pocos registros con >= 30 ordenes
+   Solucion: Fallback a usar todos los datos (con warning)
+
+Herramientas de diagnostico (src/visualization.py):
+   - identify_problematic_zones(): lista zonas con problemas
+   - plot_zone_diagnostic_panel(): panel de 4 graficos para una zona
+   - get_zone_diagnostic_info(): metricas diagnosticas
+
+
+================================================================================
+14. VALIDACION CON SESIONES REALES
+================================================================================
+El notebook valida los umbrales contra sesiones reales:
+
+Proceso:
+1. Extraer sesiones de perseus_sessions_zone (ultimos 90 dias)
+2. Join con mean_delay_report por (zone_id, minuto)
+3. Clasificar cada sesion segun los umbrales calculados
+4. Calcular % de sesiones por stage por zona
+
+Output esperado:
+   Cada zona suma 100% entre todos los stages
+
+Ejemplo (Belgrano con 1.95M sesiones):
+   - low_delay: 31.44%
+   - preventive: 24.33%
+   - containment_I: 26.39%
+   - containment_II: 12.94%
+   - inoperable: 4.89%
+
+
+================================================================================
+15. ESTRUCTURA DE ARCHIVOS DEL PROYECTO
+================================================================================
+
+Severity/
+├── config/
+│   └── settings.py              # Parametros del modelo
+│
+├── src/
+│   ├── data_extraction.py       # Queries a BigQuery
+│   │   └── extract_all_data()   # Funcion principal de extraccion
+│   │
+│   ├── feature_engineering.py   # Procesamiento de datos
+│   │   ├── calculate_zone_baselines()    # Paso 2
+│   │   ├── calculate_stress_scores()     # Paso 3
+│   │   ├── interpolate_missing_delays()  # Opcional
+│   │   ├── apply_savgol_smoothing()      # Paso 4 - SUAVIZADO
+│   │   └── build_stress_curves()         # Pipeline completo
+│   │
+│   ├── stage_calculator.py      # Calculo de umbrales
+│   │   ├── find_stress_peak_delay()              # Truncado
+│   │   ├── calculate_weighted_delay_for_bucket() # Promedio ponderado
+│   │   ├── calculate_zone_thresholds()           # Paso 5
+│   │   └── export_thresholds_for_config()        # Exportacion
+│   │
+│   └── visualization.py         # Graficos
+│       ├── plot_zone_stress_curve()      # Curva con suavizado
+│       ├── plot_zone_diagnostic_panel()  # Panel completo
+│       └── identify_problematic_zones()  # Diagnostico
+│
+├── notebooks/
+│   └── 01_exploratory_analysis.ipynb  # Notebook principal (16 celdas)
+│       Celdas:
+│       1-2.  Imports y setup
+│       3.    Extraccion de datos
+│       4-5.  Feature engineering (incluye suavizado)
+│       6-7.  Calculo de umbrales
+│       8-10. Validacion con sesiones
+│       11-12. Generacion de PDF
+│       13-15. Exportacion a CSV
+│
+├── docs/
+│   └── severity_score_explicacion.txt  # Este archivo
+│
+└── output/
+    ├── zone_thresholds.csv      # Umbrales finales
+    └── diagnostico_zonas.pdf    # 123 paginas de graficos
+
+
+================================================================================
+16. CONFIGURACION COMPLETA
+================================================================================
+config/settings.py:
+
+   # Pesos del stress score
+   STRESS_WEIGHTS = {
+       "fail_rate": 0.40,
+       "staffing_affection": 0.60
+   }
+
+   # Filtros
+   MIN_ORDERS_PER_POINT = 30    # Minimo ordenes por punto
+   MIN_RECORDS_PER_DELAY = 30   # Minimo registros para interpolar
+
+   # Suavizado Savitzky-Golay
+   SAVGOL_WINDOW = 11           # Ventana (debe ser impar)
+   SAVGOL_POLYORDER = 3         # Grado del polinomio
+
+   # Truncado
+   MIN_DELAY_FOR_TRUNCATION = 0 # 0 = usar pico real
+
+   # Percentiles de buckets (equidistantes)
+   STAGE_STRESS_PERCENTILES = {
+       'low_delay': 20,         # P0-P20
+       'preventive': 40,        # P20-P40
+       'containment_I': 60,     # P40-P60
+       'containment_II': 80,    # P60-P80
+       'inoperable': 100        # P80-P100
+   }
+
+   # Datos
+   LOOKBACK_DAYS = 90
+   DATA_START_DATE = "2025-11-27"
+
+   # Fechas excluidas
+   EXCLUDED_DATES = [
+       "2025-12-24", "2025-12-25",  # Navidad
+       "2025-12-31", "2026-01-01",  # Año nuevo
+   ]
+
+
+================================================================================
+17. TABLAS DE BIGQUERY
+================================================================================
+   Alias             | Tabla completa
+   ------------------|------------------------------------------------------
+   mean_delay_report | peya-data-origins-pro.cl_hurrier.mean_delay_report
+   fact_orders       | peya-bi-tools-pro.il_core.fact_orders
+   logistics_zones   | peya-argentina.automated_tables_reports.logistics_orders_city_zone_AR
+   staffing_daily    | peya-argentina.automated_tables_reports.sa_daily
+   sessions_zone     | peya-argentina.automated_tables_reports.perseus_sessions_zone
+   mean_delay_config | peya-data-origins-pro.cl_hurrier.mean_delay_config
+
+
+================================================================================
+18. COLUMNAS DEL DATAFRAME DE STRESS
+================================================================================
+Despues de ejecutar build_stress_curves(), el DataFrame tiene estas columnas:
+
+   Columna                  | Descripcion
+   -------------------------|------------------------------------------------
+   zone_id                  | ID de la zona
+   zone_name                | Nombre de la zona
+   city_id                  | ID de la ciudad
+   city_name                | Nombre de la ciudad
+   mean_delay_minute        | Delay en minutos (0, 1, 2, ..., 60)
+   avg_fail_rate            | PYFR promedio para ese (zona, delay)
+   avg_staffing_affection   | SA promedio para ese (zona, delay)
+   records_count            | Cantidad de registros (minutos)
+   total_orders_matched     | Total de ordenes
+   baseline_fail_rate       | Baseline de PYFR para la zona
+   baseline_staffing        | Baseline de SA para la zona
+   std_fail_rate            | Std de PYFR en el baseline
+   std_staffing             | Std de SA en el baseline
+   z_fail_rate              | Z-score de PYFR
+   z_staffing               | Z-score de SA
+   stress_score             | Stress combinado (sin normalizar)
+   stress_score_normalized  | Stress normalizado 0-100 (por zona)
+   has_enough_orders        | True si >= MIN_ORDERS_PER_POINT
+   stress_smoothed          | Stress suavizado con Savitzky-Golay
+   delay_at_min             | Delay donde stress suavizado es minimo
+   delay_at_max             | Delay donde stress suavizado es maximo
+   stress_smooth_min        | Valor del stress en el minimo
+   stress_smooth_max        | Valor del stress en el maximo
+
+
+================================================================================
+FIN DEL DOCUMENTO
+================================================================================

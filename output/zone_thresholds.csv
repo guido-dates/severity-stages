@@ -1,0 +1,123 @@
+zone_id,zone_name,city_id,city_name,low_delay,preventive,containment_I,containment_II,inoperable
+3,Santa fe,2,Santa fe,4,5,5,7,10
+4,Nuevo cordoba,3,Cordoba,4,6,7,9,12
+5,Rosario,4,Rosario,4,6,7,8,11
+9,Cerro,3,Cordoba,4,6,6,9,12
+10,Martinez,1,Buenos aires,4,6,7,10,14
+13,Palermo,1,Buenos aires,4,6,8,12,16
+15,Mar del plata norte,200,Mar del plata,4,6,7,9,14
+16,Mendoza,201,Mendoza,6,6,7,8,10
+25,Microcentro,1,Buenos aires,5,7,8,11,15
+26,Caballito,1,Buenos aires,5,7,9,12,16
+28,Villa del parque,1,Buenos aires,5,7,8,12,17
+30,Palmares,201,Mendoza,5,6,6,7,10
+32,Villa nueva,201,Mendoza,6,6,6,7,8
+37,Pinamar,200,Mar del plata,4,6,7,10,15
+38,Maipu,201,Mendoza,6,6,7,8,10
+40,Alta cordoba,3,Cordoba,7,7,7,9,13
+41,Tucuman,203,Tucuman,5,5,5,6,9
+46,Neuquen,204,Neuquen,4,6,8,11,15
+48,Villa ballester,1,Buenos aires,4,6,7,10,15
+49,Gral san martin,1,Buenos aires,5,7,8,10,13
+55,Corrientes,205,Corrientes,4,5,6,7,9
+57,San juan centro,206,San juan,6,6,6,8,10
+58,Salta norte,207,Salta,5,5,6,8,11
+59,Yerba buena,203,Tucuman,5,6,6,7,10
+60,Parana,208,Parana,5,6,6,8,11
+66,Bahia blanca,210,Bahia blanca,6,7,9,10,12
+67,Santiago del estero,211,Santiago del estero,6,7,7,8,11
+68,San luis,212,San luis,4,4,6,7,10
+69,Tandil,213,Tandil,2,5,7,9,13
+71,Rafaela,215,Rafaela,4,5,5,6,9
+72,San carlos de bariloche,209,Bariloche,4,6,8,10,14
+73,Jujuy sur,216,San salvador de jujuy,4,6,6,7,10
+74,Posadas,217,Posadas,6,6,8,8,11
+75,San rafael,218,San rafael,5,6,7,8,10
+78,Villa carlos paz,3,Cordoba,5,5,7,9,12
+79,Junin,219,Junin,3,3,4,7,10
+85,San nicolas de los arroyos,220,San nicolas de los arroyos,4,6,7,9,13
+87,Santa rosa,222,Santa rosa,4,6,7,9,12
+89,La rioja,224,La rioja,6,6,7,7,10
+90,Rio gallegos,225,Rio gallegos,3,4,5,7,9
+91,Catamarca,226,Catamarca,5,7,7,8,11
+92,Pergamino,227,Pergamino,2,4,5,7,10
+94,Formosa,228,Formosa,4,5,6,8,11
+95,Trelew,223,Trelew,6,6,7,8,11
+96,Ushuaia,229,Ushuaia,4,6,8,8,11
+97,Necochea,200,Mar del plata,4,5,6,7,10
+101,Cerro norte,3,Cordoba,3,5,6,7,10
+108,Mar del plata sur,200,Mar del plata,5,5,7,9,13
+109,San isidro,1,Buenos aires,3,4,7,10,15
+110,Vicente lopez,1,Buenos aires,4,6,8,11,16
+112,San juan oeste,206,San juan,5,5,6,7,10
+113,Salta sur,207,Salta,4,6,7,8,10
+120,Alberdi,3,Cordoba,5,5,7,9,12
+127,Colon,3,Cordoba,1,4,6,8,11
+129,Cipoletti,232,Cipolletti,3,4,7,10,14
+130,Goya,233,Goya,3,4,4,6,8
+133,Villa maria,235,Villa maria,4,5,7,10,14
+135,Puerto madryn,237,Puerto madryn,6,6,7,7,9
+137,Villa krause,206,San juan,5,7,8,9,12
+138,Rio cuarto nuevo,240,Rio cuarto,1,4,6,8,11
+139,Olavarria nuevo,238,Olavarria,4,4,6,7,10
+142,Castañares,207,Salta,3,3,5,6,9
+144,Mayor drummond,201,Mendoza,1,3,5,7,10
+145,Villa allende,3,Cordoba,4,6,8,9,12
+146,Funes,4,Rosario,3,5,6,9,13
+148,Comodoro rivadavia,245,Comodoro rivadavia,6,7,8,10,12
+151,Concepcion,247,Concepcion,4,4,6,7,10
+152,Tafi viejo,203,Tucuman,3,3,5,6,9
+155,Viedma,243,Viedma,4,6,7,9,12
+157,La plata nuevo,248,La plata,6,6,6,8,11
+159,City bell nuevo,248,La plata,4,5,5,8,12
+168,Zarate nuevo,249,Zarate campana,4,6,8,10,14
+169,Campana nuevo,249,Zarate campana,6,6,8,10,11
+170,Lujan nuevo,250,Lujan,5,5,7,9,13
+171,Santo tome,256,Santo tome,2,4,4,6,9
+172,Saenz pena,257,Saenz pena,4,4,5,6,7
+174,Villa mercedes,251,Villa mercedes,5,5,6,7,8
+180,Avellaneda nuevo,259,Gba sur,5,5,6,8,10
+181,Villa dominico nuevo,259,Gba sur,1,4,6,8,11
+182,Quilmes nuevo,259,Gba sur,6,8,8,9,12
+183,Berazategui nuevo,259,Gba sur,5,5,6,7,10
+184,Hudson nuevo,259,Gba sur,6,8,9,12,17
+185,Florencio varela nuevo,259,Gba sur,6,7,8,10,13
+186,Lanus este nuevo,259,Gba sur,5,7,8,11,16
+188,Lomas de zamora nuevo,259,Gba sur,7,8,10,12,16
+189,Adrogue nuevo,259,Gba sur,6,7,8,10,13
+190,Monte grande nuevo,259,Gba sur,3,3,5,6,9
+191,Ezeiza nuevo,259,Gba sur,6,8,9,12,16
+193,Azul,254,Azul,2,2,5,7,10
+199,Liniers,1,Buenos aires,5,7,8,12,17
+203,Reconquista,261,Reconquista,4,5,5,6,9
+204,Venado tuerto,262,Venado tuerto,3,3,4,7,10
+206,Fisherton,4,Rosario,3,4,5,8,11
+207,Esperanza,263,Esperanza,4,4,5,5,8
+208,Belgrano,1,Buenos aires,6,8,9,12,17
+216,Benavidez nuevo,264,Buenos aires norte,7,9,9,11,14
+217,Del viso nuevo,264,Buenos aires norte,5,7,8,10,14
+218,Villa rosa nuevo,264,Buenos aires norte,5,7,8,11,16
+219,Don torcuato nuevo,264,Buenos aires norte,6,6,6,8,11
+220,Escobar nuevo,264,Buenos aires norte,6,9,11,12,16
+221,Grand bourg nuevo,264,Buenos aires norte,8,10,11,13,17
+222,Ing maschwitz nuevo,264,Buenos aires norte,6,7,8,10,14
+223,Jose c paz nuevo,264,Buenos aires norte,3,5,5,6,9
+224,Los polvorines nuevo,264,Buenos aires norte,7,8,9,11,14
+225,Manuel alberti nuevo,264,Buenos aires norte,5,7,8,10,15
+226,Tigre nuevo,264,Buenos aires norte,4,5,7,10,15
+227,Pilar sur nuevo,264,Buenos aires norte,5,7,8,10,14
+228,Matheu nuevo,264,Buenos aires norte,7,9,10,13,17
+229,Nordelta nuevo,264,Buenos aires norte,8,9,12,14,19
+230,Pacheco nuevo,264,Buenos aires norte,7,9,10,12,16
+231,Pilar nuevo,264,Buenos aires norte,5,7,8,11,15
+232,San miguel nuevo,264,Buenos aires norte,7,8,9,12,16
+233,Ramos mejia nuevo,265,Gba oeste,4,6,7,10,14
+234,3 de febrero nuevo,265,Gba oeste,6,8,9,11,15
+235,La matanza nuevo,265,Gba oeste,6,9,9,11,15
+236,Moron nuevo,265,Gba oeste,5,6,7,9,13
+237,Hurlingham nuevo,265,Gba oeste,5,6,7,9,12
+238,Laferrere nuevo,265,Gba oeste,5,7,9,12,16
+239,Ituzaingo nuevo,265,Gba oeste,4,4,6,7,10
+240,Parque leloir nuevo,265,Gba oeste,5,5,5,8,11
+241,Merlo nuevo,265,Gba oeste,6,6,8,9,12
+242,Moreno nuevo,265,Gba oeste,4,7,8,10,13
